@@ -1,0 +1,1889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EventFlow — Real-Time Cloud RSVP Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════
+   DESIGN TOKENS — Cool midnight tech palette
+   ══════════════════════════════════════════ */
+:root {
+  --bg:         #0d1117;
+  --surface:    #161b22;
+  --surface2:   #1c2128;
+  --surface3:   #21262d;
+  --border:     #30363d;
+  --border2:    #3d444d;
+  --text:       #e6edf3;
+  --text-muted: #8b949e;
+  --text-dim:   #484f58;
+  --accent:     #58a6ff;
+  --accent2:    #1f6feb;
+  --green:      #3fb950;
+  --green-dim:  #1a3a22;
+  --yellow:     #d29922;
+  --yellow-dim: #3a2a0d;
+  --red:        #f85149;
+  --red-dim:    #3a1a1a;
+  --purple:     #bc8cff;
+  --purple-dim: #2a1a3a;
+  --orange:     #f0883e;
+  --orange-dim: #3a2010;
+  --radius:     8px;
+  --radius-lg:  12px;
+  --shadow:     0 0 0 1px var(--border);
+  --glow:       0 0 20px rgba(88,166,255,.15);
+  --mono:       'DM Mono', monospace;
+  --sans:       'Inter', system-ui, sans-serif;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+*,*::before,*::after{box-sizing:inherit;margin:0;padding:0}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.6}
+
+/* ══ LAYOUT ══ */
+#app{display:flex;height:100vh;overflow:hidden}
+#sidebar{width:240px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;transition:transform .2s}
+#main{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+.page{display:none;padding:24px;flex:1}
+.page.active{display:block}
+
+/* ══ AUTH SCREEN ══ */
+#auth-screen{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
+.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:36px;width:100%;max-width:420px;box-shadow:var(--glow)}
+.auth-logo{display:flex;align-items:center;gap:10px;margin-bottom:28px}
+.auth-logo svg{color:var(--accent)}
+.auth-logo span{font-size:20px;font-weight:700;letter-spacing:-.5px}
+.auth-tabs{display:flex;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:24px}
+.auth-tab{flex:1;padding:8px;text-align:center;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-muted);background:transparent;border:none;transition:.15s}
+.auth-tab.active{background:var(--accent2);color:#fff}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;font-weight:500;color:var(--text-muted);margin-bottom:5px}
+.field input,.field select,.field textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none;transition:.15s}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(88,166,255,.12)}
+.field textarea{resize:vertical;min-height:72px}
+.field select option{background:var(--surface2)}
+.role-pills{display:flex;gap:8px;margin-bottom:18px}
+.role-pill{flex:1;padding:10px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-align:center;transition:.15s}
+.role-pill.selected{border-color:var(--accent);background:rgba(88,166,255,.08)}
+.role-pill .rp-icon{font-size:20px;display:block;margin-bottom:3px}
+.role-pill .rp-label{font-size:12px;font-weight:500;color:var(--text-muted)}
+.role-pill.selected .rp-label{color:var(--accent)}
+.demo-users{margin-top:16px;padding:12px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border)}
+.demo-users p{font-size:11px;color:var(--text-muted);margin-bottom:8px;font-weight:500}
+.demo-btn{display:block;width:100%;padding:7px 10px;margin-bottom:5px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer;text-align:left;transition:.12s}
+.demo-btn:hover{border-color:var(--accent);color:var(--accent)}
+.demo-btn:last-child{margin-bottom:0}
+
+/* ══ SIDEBAR ══ */
+.sidebar-header{padding:16px 14px 12px;border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;letter-spacing:-.4px;color:var(--text)}
+.brand svg{color:var(--accent)}
+.user-chip{margin-top:10px;padding:8px 10px;background:var(--surface2);border-radius:var(--radius);display:flex;align-items:center;gap:9px}
+.user-chip .avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0}
+.avatar.org{background:linear-gradient(135deg,#1f6feb,#58a6ff);color:#fff}
+.avatar.att{background:linear-gradient(135deg,#2ea043,#3fb950);color:#fff}
+.user-chip .info{min-width:0}
+.user-chip .uname{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-chip .urole{font-size:10px;color:var(--text-muted)}
+.nav{flex:1;padding:10px 8px;overflow-y:auto}
+.nav-section{font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.8px;padding:8px 8px 4px;margin-top:6px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:6px;cursor:pointer;color:var(--text-muted);font-size:13px;font-weight:500;transition:.12s;margin-bottom:1px}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:rgba(88,166,255,.1);color:var(--accent)}
+.nav-item svg{flex-shrink:0;opacity:.7}
+.nav-item.active svg{opacity:1}
+.nav-badge{margin-left:auto;background:var(--accent);color:#000;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px}
+.sidebar-footer{padding:10px 8px;border-top:1px solid var(--border)}
+.logout-btn{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:6px;cursor:pointer;color:var(--red);font-size:13px;font-weight:500;width:100%;background:transparent;border:none;transition:.12s}
+.logout-btn:hover{background:var(--red-dim)}
+
+/* ══ TOP BAR ══ */
+.topbar{padding:14px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;background:var(--bg);position:sticky;top:0;z-index:10}
+.topbar h1{font-size:18px;font-weight:700;letter-spacing:-.4px;flex:1}
+.topbar .live-badge{display:flex;align-items:center;gap:6px;padding:4px 10px;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);border-radius:20px;font-size:11px;font-weight:600;color:var(--green)}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+.notif-btn{position:relative;background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:6px;border-radius:6px}
+.notif-btn:hover{background:var(--surface2);color:var(--text)}
+.notif-badge{position:absolute;top:2px;right:2px;width:14px;height:14px;background:var(--red);border-radius:50%;font-size:9px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center}
+
+/* ══ BUTTONS ══ */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:.15s;font-family:var(--sans)}
+.btn-primary{background:var(--accent);color:#000}
+.btn-primary:hover{background:#79b8ff}
+.btn-secondary{background:transparent;border:1px solid var(--border2);color:var(--text)}
+.btn-secondary:hover{background:var(--surface2);border-color:var(--border)}
+.btn-ghost{background:transparent;color:var(--text-muted);padding:6px 10px}
+.btn-ghost:hover{background:var(--surface2);color:var(--text)}
+.btn-danger{background:var(--red);color:#fff}
+.btn-danger:hover{background:#ff6b6b}
+.btn-success{background:var(--green);color:#000}
+.btn-success:hover{background:#56d364}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-full{width:100%;justify-content:center}
+
+/* ══ CARDS ══ */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+.card-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:14px;font-weight:600}
+.card-body{padding:18px}
+
+/* ══ STAT GRID ══ */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px}
+.stat-card .stat-label{font-size:11px;color:var(--text-muted);font-weight:500;margin-bottom:6px}
+.stat-card .stat-value{font-size:28px;font-weight:700;line-height:1;font-family:var(--mono);letter-spacing:-1px}
+.stat-card .stat-sub{font-size:11px;color:var(--text-muted);margin-top:4px}
+.stat-card.green .stat-value{color:var(--green)}
+.stat-card.yellow .stat-value{color:var(--yellow)}
+.stat-card.red .stat-value{color:var(--red)}
+.stat-card.purple .stat-value{color:var(--purple)}
+.stat-card.blue .stat-value{color:var(--accent)}
+
+/* ══ EVENT CARDS ══ */
+.events-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.event-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;transition:.15s;cursor:pointer}
+.event-card:hover{border-color:var(--border2);transform:translateY(-1px);box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.event-card-top{padding:16px 18px 12px;border-bottom:1px solid var(--border)}
+.event-card-type{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--accent);margin-bottom:6px}
+.event-card-name{font-size:15px;font-weight:700;line-height:1.3;margin-bottom:4px}
+.event-card-desc{font-size:12px;color:var(--text-muted);line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.event-card-meta{padding:10px 18px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.meta-chip{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted)}
+.event-card-footer{padding:10px 18px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.rsvp-bar-wrap{flex:1;margin-right:12px}
+.rsvp-bar{height:4px;background:var(--surface3);border-radius:2px;overflow:hidden;margin-bottom:3px}
+.rsvp-bar-fill{height:100%;background:linear-gradient(90deg,var(--green),var(--accent));border-radius:2px;transition:width .5s}
+.rsvp-bar-label{font-size:10px;color:var(--text-muted)}
+.status-badge{padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.status-PUBLISHED{background:rgba(63,185,80,.15);color:var(--green)}
+.status-DRAFT{background:var(--surface3);color:var(--text-muted)}
+.status-FULL{background:rgba(188,140,255,.15);color:var(--purple)}
+.status-CANCELLED{background:var(--red-dim);color:var(--red)}
+.status-COMPLETED{background:var(--surface3);color:var(--text-muted)}
+
+/* ══ RSVP BUTTONS ══ */
+.rsvp-group{display:flex;gap:8px;margin-top:16px}
+.rsvp-opt{flex:1;padding:10px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-align:center;background:var(--surface2);transition:.15s;font-size:12px;font-weight:600;color:var(--text-muted)}
+.rsvp-opt:hover:not(:disabled){border-color:var(--border2);color:var(--text)}
+.rsvp-opt.selected-GOING{border-color:var(--green);background:var(--green-dim);color:var(--green)}
+.rsvp-opt.selected-MAYBE{border-color:var(--yellow);background:var(--yellow-dim);color:var(--yellow)}
+.rsvp-opt.selected-NOT_GOING{border-color:var(--red);background:var(--red-dim);color:var(--red)}
+.rsvp-opt:disabled{opacity:.4;cursor:not-allowed}
+
+/* ══ REAL-TIME COUNTER ══ */
+.rt-counter{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.rt-count{text-align:center;min-width:60px}
+.rt-num{font-size:32px;font-weight:700;font-family:var(--mono);letter-spacing:-2px;transition:transform .3s,color .3s}
+.rt-num.bump{animation:bump .4s ease}
+@keyframes bump{0%{transform:scale(1)}50%{transform:scale(1.2)}100%{transform:scale(1)}}
+.rt-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-top:2px}
+.rt-count.going .rt-num{color:var(--green)}
+.rt-count.maybe .rt-num{color:var(--yellow)}
+.rt-count.not-going .rt-num{color:var(--red)}
+
+/* ══ MINI BAR CHART ══ */
+.bar-chart{display:flex;align-items:flex-end;gap:6px;height:80px;margin-top:10px}
+.bar{flex:1;background:var(--accent);border-radius:3px 3px 0 0;min-height:4px;transition:height .4s,background .3s;position:relative}
+.bar.green{background:var(--green)}
+.bar.yellow{background:var(--yellow)}
+.bar.red{background:var(--red)}
+.bar-label{font-size:9px;color:var(--text-muted);text-align:center;margin-top:4px}
+.bar-group{flex:1;display:flex;flex-direction:column;align-items:center}
+
+/* ══ ANNOUNCEMENTS ══ */
+.announcement{background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px}
+.ann-title{font-size:13px;font-weight:600;margin-bottom:3px}
+.ann-body{font-size:12px;color:var(--text-muted);line-height:1.5}
+.ann-meta{font-size:10px;color:var(--text-dim);margin-top:6px}
+
+/* ══ NOTIFICATIONS ══ */
+.notif-panel{position:absolute;top:50px;right:0;width:320px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 8px 30px rgba(0,0,0,.4);z-index:50;overflow:hidden}
+.notif-panel-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.notif-list{max-height:360px;overflow-y:auto}
+.notif-item{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;cursor:pointer;transition:.12s}
+.notif-item:hover{background:var(--surface2)}
+.notif-item.unread{background:rgba(88,166,255,.04)}
+.notif-icon{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px}
+.notif-text{font-size:12px;line-height:1.5;color:var(--text-muted)}
+.notif-text strong{color:var(--text)}
+.notif-time{font-size:10px;color:var(--text-dim);margin-top:2px}
+.notif-empty{padding:24px;text-align:center;color:var(--text-muted);font-size:12px}
+
+/* ══ MODAL ══ */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);width:100%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:1}
+.modal-title{font-size:16px;font-weight:700}
+.modal-close{background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:4px;border-radius:4px;line-height:1}
+.modal-close:hover{background:var(--surface2);color:var(--text)}
+.modal-body{padding:20px}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:var(--surface)}
+
+/* ══ TOAST ══ */
+#toast-container{position:fixed;bottom:24px;right:24px;z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;font-size:13px;max-width:320px;box-shadow:0 4px 20px rgba(0,0,0,.4);display:flex;align-items:center;gap:10px;pointer-events:all;animation:slideIn .25s ease;border-left:3px solid var(--accent)}
+.toast.success{border-left-color:var(--green)}
+.toast.error{border-left-color:var(--red)}
+.toast.warning{border-left-color:var(--yellow)}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* ══ TABLE ══ */
+.data-table{width:100%;border-collapse:collapse;font-size:13px}
+.data-table th{text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--border)}
+.data-table td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--text)}
+.data-table tr:last-child td{border-bottom:none}
+.data-table tr:hover td{background:var(--surface2)}
+
+/* ══ CAPACITY BAR ══ */
+.capacity-bar{height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;margin:8px 0}
+.capacity-fill{height:100%;border-radius:3px;transition:width .5s}
+.cap-low{background:var(--green)}
+.cap-mid{background:var(--yellow)}
+.cap-high{background:var(--orange)}
+.cap-full{background:var(--red)}
+
+/* ══ TABS ══ */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px}
+.tab{padding:9px 16px;font-size:13px;font-weight:500;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:.15s}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab:hover:not(.active){color:var(--text)}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* ══ ANALYTICS ══ */
+.analytics-chart{display:flex;align-items:flex-end;gap:4px;height:120px;padding:0 4px}
+.chart-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center}
+.chart-bar{width:100%;border-radius:3px 3px 0 0;min-height:2px;transition:height .4s;background:var(--accent)}
+.chart-x{font-size:9px;color:var(--text-dim);margin-top:4px;text-align:center}
+
+/* ══ EMPTY STATE ══ */
+.empty-state{padding:48px 24px;text-align:center}
+.empty-icon{font-size:40px;margin-bottom:12px;opacity:.5}
+.empty-title{font-size:16px;font-weight:600;margin-bottom:6px}
+.empty-desc{font-size:13px;color:var(--text-muted);max-width:300px;margin:0 auto 16px}
+
+/* ══ MISC ══ */
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.section-title{font-size:16px;font-weight:700}
+.divider{height:1px;background:var(--border);margin:16px 0}
+.tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
+.text-muted{color:var(--text-muted)}
+.text-small{font-size:12px}
+.gap-2{gap:8px}
+.flex{display:flex}
+.items-center{align-items:center}
+.flex-1{flex:1}
+.monospace{font-family:var(--mono);font-size:12px}
+.detail-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px}
+.detail-row .dkey{width:140px;flex-shrink:0;font-size:12px;color:var(--text-muted);font-weight:500;padding-top:1px}
+.detail-row .dval{font-size:13px;flex:1}
+.code-block{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;font-family:var(--mono);font-size:11px;color:var(--green);overflow-x:auto;white-space:pre;line-height:1.6}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:640px){.form-row{grid-template-columns:1fr}}
+.error-text{font-size:12px;color:var(--red);margin-top:4px}
+.success-text{font-size:12px;color:var(--green);margin-top:4px}
+.sticky-bar{position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--border);padding:12px 24px;display:flex;gap:8px;z-index:5}
+.alert{padding:10px 14px;border-radius:var(--radius);font-size:12px;margin-bottom:14px;display:flex;align-items:flex-start;gap:8px;line-height:1.5}
+.alert.info{background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.2);color:var(--accent)}
+.alert.warning{background:var(--yellow-dim);border:1px solid rgba(210,153,34,.3);color:var(--yellow)}
+.alert.error{background:var(--red-dim);border:1px solid rgba(248,81,73,.3);color:var(--red)}
+.alert.success{background:var(--green-dim);border:1px solid rgba(63,185,80,.3);color:var(--green)}
+input::placeholder{color:var(--text-dim)}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+</style>
+</head>
+<body>
+
+<!-- ══ AUTH SCREEN ══ -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/>
+        <path d="m9 14 2 2 4-4"/>
+      </svg>
+      <span>EventFlow</span>
+    </div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuthTab('login')">Sign In</button>
+      <button class="auth-tab" onclick="switchAuthTab('register')">Register</button>
+    </div>
+    <!-- Login Form -->
+    <div id="login-form">
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@example.com">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="••••••••">
+      </div>
+      <div id="login-error" class="error-text" style="margin-bottom:10px"></div>
+      <button class="btn btn-primary btn-full" onclick="doLogin()">Sign In</button>
+      <!-- Demo users -->
+      <div class="demo-users">
+        <p>⚡ DEMO — Quick sign in</p>
+        <button class="demo-btn" onclick="quickLogin('alice@eventflow.io','pass123')">🗂 Alice Chen — Organizer</button>
+        <button class="demo-btn" onclick="quickLogin('bob@example.com','pass123')">🎟 Bob Sharma — Attendee</button>
+        <button class="demo-btn" onclick="quickLogin('carol@example.com','pass123')">🎟 Carol Nair — Attendee</button>
+        <button class="demo-btn" onclick="quickLogin('dan@example.com','pass123')">🎟 Dan Patel — Attendee</button>
+        <button class="demo-btn" onclick="quickLogin('eve@example.com','pass123')">🗂 Eve Rodrigues — Organizer</button>
+      </div>
+    </div>
+    <!-- Register Form -->
+    <div id="register-form" style="display:none">
+      <div class="field">
+        <label>Full Name</label>
+        <input type="text" id="reg-name" placeholder="Your full name">
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="reg-email" placeholder="you@example.com">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="reg-password" placeholder="Min 6 characters">
+      </div>
+      <div class="field">
+        <label>Role</label>
+        <div class="role-pills">
+          <div class="role-pill selected" id="rp-att" onclick="selectRole('ATTENDEE')">
+            <span class="rp-icon">🎟</span>
+            <span class="rp-label">Attendee</span>
+          </div>
+          <div class="role-pill" id="rp-org" onclick="selectRole('ORGANIZER')">
+            <span class="rp-icon">🗂</span>
+            <span class="rp-label">Organizer</span>
+          </div>
+        </div>
+      </div>
+      <div id="reg-error" class="error-text" style="margin-bottom:10px"></div>
+      <button class="btn btn-primary btn-full" onclick="doRegister()">Create Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ APP SHELL ══ -->
+<div id="app" style="display:none">
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div class="sidebar-header">
+      <div class="brand">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/>
+          <path d="m9 14 2 2 4-4"/>
+        </svg>
+        EventFlow
+      </div>
+      <div class="user-chip">
+        <div class="avatar" id="sidebar-avatar"></div>
+        <div class="info">
+          <div class="uname" id="sidebar-name">Loading...</div>
+          <div class="urole" id="sidebar-role"></div>
+        </div>
+      </div>
+    </div>
+    <nav class="nav" id="nav-links"></nav>
+    <div class="sidebar-footer">
+      <button class="logout-btn" onclick="doLogout()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        Sign Out
+      </button>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div id="main">
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <h1 id="topbar-title">Dashboard</h1>
+      <div class="live-badge"><div class="live-dot"></div>Real-Time Active</div>
+      <div style="position:relative">
+        <button class="notif-btn" id="notif-btn" onclick="toggleNotifPanel()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+          <span class="notif-badge" id="notif-badge" style="display:none">0</span>
+        </button>
+        <div class="notif-panel" id="notif-panel" style="display:none">
+          <div class="notif-panel-header">
+            <span style="font-size:13px;font-weight:600">Notifications</span>
+            <button class="btn btn-ghost btn-sm" onclick="markAllRead()">Mark all read</button>
+          </div>
+          <div class="notif-list" id="notif-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGES -->
+    <!-- ── ORGANIZER DASHBOARD ── -->
+    <div class="page active" id="page-org-dashboard">
+      <div class="stat-grid" id="org-stats"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px" id="org-charts-row">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Live RSVP Monitor</span><span class="monospace text-muted" id="live-event-label" style="font-size:11px"></span></div>
+          <div class="card-body">
+            <div class="rt-counter" id="live-rt-counter">
+              <div class="rt-count going"><div class="rt-num" id="rt-going">0</div><div class="rt-label" style="color:var(--green)">Going</div></div>
+              <div style="font-size:24px;color:var(--border2)">·</div>
+              <div class="rt-count maybe"><div class="rt-num" id="rt-maybe">0</div><div class="rt-label" style="color:var(--yellow)">Maybe</div></div>
+              <div style="font-size:24px;color:var(--border2)">·</div>
+              <div class="rt-count not-going"><div class="rt-num" id="rt-not-going">0</div><div class="rt-label" style="color:var(--red)">Not Going</div></div>
+            </div>
+            <div class="capacity-bar" style="margin-top:14px"><div class="capacity-fill" id="cap-bar-fill" style="width:0%"></div></div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted)">
+              <span id="cap-label-left">Capacity</span>
+              <span id="cap-label-right">0 / 0</span>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">RSVP Distribution</span></div>
+          <div class="card-body">
+            <div class="bar-chart" id="rsvp-bar-chart"></div>
+            <div style="display:flex;gap:12px;margin-top:10px;justify-content:center">
+              <span style="font-size:11px;color:var(--green)">● Going</span>
+              <span style="font-size:11px;color:var(--yellow)">● Maybe</span>
+              <span style="font-size:11px;color:var(--red)">● Not Going</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="section-header">
+        <span class="section-title">My Events</span>
+        <button class="btn btn-primary btn-sm" onclick="openCreateEvent()">+ New Event</button>
+      </div>
+      <div class="events-grid" id="org-events-grid"></div>
+    </div>
+
+    <!-- ── ATTENDEE DASHBOARD ── -->
+    <div class="page" id="page-att-dashboard">
+      <div class="stat-grid" id="att-stats"></div>
+      <div class="section-header"><span class="section-title">Upcoming Events</span></div>
+      <div class="events-grid" id="att-events-grid"></div>
+    </div>
+
+    <!-- ── MY RSVPs ── -->
+    <div class="page" id="page-my-rsvps">
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('rsvp-going','my-rsvp-tabs',this)">Going</div>
+        <div class="tab" onclick="switchTab('rsvp-maybe','my-rsvp-tabs',this)">Maybe</div>
+        <div class="tab" onclick="switchTab('rsvp-not','my-rsvp-tabs',this)">Not Going</div>
+        <div class="tab" onclick="switchTab('rsvp-all','my-rsvp-tabs',this)">All</div>
+      </div>
+      <div id="my-rsvp-tabs">
+        <div class="tab-content active" id="rsvp-going"></div>
+        <div class="tab-content" id="rsvp-maybe"></div>
+        <div class="tab-content" id="rsvp-not"></div>
+        <div class="tab-content" id="rsvp-all"></div>
+      </div>
+    </div>
+
+    <!-- ── ALL EVENTS ── -->
+    <div class="page" id="page-all-events">
+      <div class="section-header">
+        <span class="section-title">Browse Events</span>
+        <input type="text" id="event-search" placeholder="Search events..." oninput="renderAllEvents()" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:7px 12px;color:var(--text);font-size:13px;outline:none;width:220px">
+      </div>
+      <div class="events-grid" id="all-events-grid"></div>
+    </div>
+
+    <!-- ── EVENT DETAIL ── -->
+    <div class="page" id="page-event-detail">
+      <div id="event-detail-content"></div>
+    </div>
+
+    <!-- ── ANALYTICS ── -->
+    <div class="page" id="page-analytics">
+      <div id="analytics-content"></div>
+    </div>
+
+    <!-- ── ANNOUNCEMENTS ── -->
+    <div class="page" id="page-announcements">
+      <div id="announcements-content"></div>
+    </div>
+
+    <!-- ── ARCHITECTURE ── -->
+    <div class="page" id="page-architecture">
+      <div id="arch-content"></div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ══ MODAL: Create/Edit Event ══ -->
+<div class="modal-overlay" id="modal-event" style="display:none" onclick="if(event.target===this)closeModal('modal-event')">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-event-title">Create Event</span>
+      <button class="modal-close" onclick="closeModal('modal-event')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-event-id">
+      <div class="field">
+        <label>Event Name</label>
+        <input type="text" id="ev-name" placeholder="Cloud Computing Workshop 2027">
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <textarea id="ev-desc" placeholder="Describe your event..."></textarea>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>Event Type</label>
+          <select id="ev-type">
+            <option>Workshop</option><option>Conference</option><option>Webinar</option>
+            <option>Meetup</option><option>Festival</option><option>Training</option>
+            <option>Seminar</option><option>Networking</option><option>Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Maximum Capacity</label>
+          <input type="number" id="ev-capacity" value="100" min="1">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>Event Date</label>
+          <input type="date" id="ev-date">
+        </div>
+        <div class="field">
+          <label>Registration Deadline</label>
+          <input type="date" id="ev-deadline">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>Start Time</label>
+          <input type="time" id="ev-start-time" value="10:00">
+        </div>
+        <div class="field">
+          <label>End Time</label>
+          <input type="time" id="ev-end-time" value="17:00">
+        </div>
+      </div>
+      <div class="field">
+        <label>Venue</label>
+        <input type="text" id="ev-venue" placeholder="Pune Tech Hub, Hall A">
+      </div>
+      <div class="field">
+        <label>Online Meeting Link (optional)</label>
+        <input type="url" id="ev-link" placeholder="https://meet.google.com/...">
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>Status</label>
+          <select id="ev-status">
+            <option value="PUBLISHED">Published</option>
+            <option value="DRAFT">Draft</option>
+          </select>
+        </div>
+      </div>
+      <div id="modal-event-error" class="error-text"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-event')">Cancel</button>
+      <button class="btn btn-primary" id="modal-event-save-btn" onclick="saveEvent()">Create Event</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: Announcement ══ -->
+<div class="modal-overlay" id="modal-ann" style="display:none" onclick="if(event.target===this)closeModal('modal-ann')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <span class="modal-title">Post Announcement</span>
+      <button class="modal-close" onclick="closeModal('modal-ann')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ann-event-id">
+      <div class="field"><label>Title</label><input type="text" id="ann-title" placeholder="Venue Changed"></div>
+      <div class="field"><label>Message</label><textarea id="ann-msg" placeholder="Important update..."></textarea></div>
+      <div id="ann-error" class="error-text"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-ann')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAnnouncement()">Publish</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TOAST CONTAINER ══ -->
+<div id="toast-container"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// CLOUD RSVP TRACKER — Complete State & Logic
+// Simulates: Cloud DB, Real-Time, Auth, Role-Based Access
+// ══════════════════════════════════════════════════════════
+
+// ── In-Memory Cloud Database ──
+const DB = {
+  users: [],
+  events: [],
+  rsvps: [],
+  announcements: [],
+  notifications: [],
+  waitlist: [],
+  audit_logs: []
+};
+
+// ── Seeded Data (Synthetic Users) ──
+function seedData() {
+  const now = Date.now();
+  const users = [
+    {id:'u1',name:'Alice Chen',email:'alice@eventflow.io',password:'pass123',role:'ORGANIZER',createdAt:now-86400000*30},
+    {id:'u2',name:'Bob Sharma',email:'bob@example.com',password:'pass123',role:'ATTENDEE',createdAt:now-86400000*25},
+    {id:'u3',name:'Carol Nair',email:'carol@example.com',password:'pass123',role:'ATTENDEE',createdAt:now-86400000*20},
+    {id:'u4',name:'Dan Patel',email:'dan@example.com',password:'pass123',role:'ATTENDEE',createdAt:now-86400000*15},
+    {id:'u5',name:'Eve Rodrigues',email:'eve@example.com',password:'pass123',role:'ORGANIZER',createdAt:now-86400000*10},
+    {id:'u6',name:'Frank Liu',email:'frank@example.com',password:'pass123',role:'ATTENDEE',createdAt:now-86400000*8},
+    {id:'u7',name:'Grace Kim',email:'grace@example.com',password:'pass123',role:'ATTENDEE',createdAt:now-86400000*5},
+  ];
+  DB.users.push(...users);
+
+  const eventDate1 = new Date(Date.now() + 86400000*7);
+  const eventDate2 = new Date(Date.now() + 86400000*14);
+  const eventDate3 = new Date(Date.now() + 86400000*3);
+  const eventDate4 = new Date(Date.now() - 86400000*5);
+  const fmt = d => d.toISOString().split('T')[0];
+
+  const events = [
+    {id:'ev1',organizerId:'u1',organizerName:'Alice Chen',eventName:'Cloud Computing Workshop 2027',description:'Hands-on workshop covering AWS, GCP, serverless architectures, Docker, Kubernetes, and cloud-native app development. All levels welcome.',eventType:'Workshop',eventDate:fmt(eventDate1),startTime:'10:00',endTime:'17:00',venue:'Pune Tech Hub, Hall A',onlineLink:'https://meet.google.com/abc-defg-hij',maximumCapacity:100,registrationDeadline:fmt(new Date(Date.now()+86400000*5)),status:'PUBLISHED',createdAt:now-86400000*3,updatedAt:now-86400000*3},
+    {id:'ev2',organizerId:'u1',organizerName:'Alice Chen',eventName:'React & Next.js Bootcamp',description:'Two-day intensive bootcamp on modern React patterns, server components, and full-stack Next.js applications. Includes hands-on projects and code reviews.',eventType:'Training',eventDate:fmt(eventDate2),startTime:'09:00',endTime:'18:00',venue:'Innovation Hub, Floor 3',onlineLink:'',maximumCapacity:40,registrationDeadline:fmt(new Date(Date.now()+86400000*10)),status:'PUBLISHED',createdAt:now-86400000*5,updatedAt:now-86400000*2},
+    {id:'ev3',organizerId:'u5',organizerName:'Eve Rodrigues',eventName:'AI/ML in Production',description:'Exploring deployment strategies for machine learning models at scale. Topics include MLOps, model monitoring, and real-time inference pipelines.',eventType:'Conference',eventDate:fmt(eventDate3),startTime:'11:00',endTime:'16:00',venue:'Online only',onlineLink:'https://zoom.us/j/123456789',maximumCapacity:500,registrationDeadline:fmt(new Date(Date.now()+86400000*2)),status:'PUBLISHED',createdAt:now-86400000*7,updatedAt:now-86400000*1},
+    {id:'ev4',organizerId:'u5',organizerName:'Eve Rodrigues',eventName:'DevOps & CI/CD Masterclass',description:'Deep dive into modern DevOps practices. GitHub Actions, Docker, K8s, and monitoring with Prometheus and Grafana.',eventType:'Workshop',eventDate:fmt(eventDate2),startTime:'10:00',endTime:'15:00',venue:'Tech Park, Room 201',onlineLink:'',maximumCapacity:60,registrationDeadline:fmt(new Date(Date.now()+86400000*12)),status:'PUBLISHED',createdAt:now-86400000*4,updatedAt:now-86400000*4},
+    {id:'ev5',organizerId:'u1',organizerName:'Alice Chen',eventName:'Database Design Summit',description:'An in-depth look at SQL vs NoSQL, indexing strategies, and designing for scale. Guest speakers from industry.',eventType:'Seminar',eventDate:fmt(eventDate4),startTime:'09:30',endTime:'16:30',venue:'Symposium Hall B',onlineLink:'',maximumCapacity:80,registrationDeadline:fmt(new Date(Date.now()-86400000*7)),status:'COMPLETED',createdAt:now-86400000*15,updatedAt:now-86400000*5},
+  ];
+  DB.events.push(...events);
+
+  const rsvps = [
+    {id:'r1',eventId:'ev1',userId:'u2',status:'GOING',respondedAt:now-3600000*5,updatedAt:now-3600000*5},
+    {id:'r2',eventId:'ev1',userId:'u3',status:'MAYBE',respondedAt:now-3600000*4,updatedAt:now-3600000*4},
+    {id:'r3',eventId:'ev1',userId:'u4',status:'GOING',respondedAt:now-3600000*3,updatedAt:now-3600000*3},
+    {id:'r4',eventId:'ev1',userId:'u6',status:'NOT_GOING',respondedAt:now-3600000*2,updatedAt:now-3600000*2},
+    {id:'r5',eventId:'ev1',userId:'u7',status:'GOING',respondedAt:now-3600000,updatedAt:now-3600000},
+    {id:'r6',eventId:'ev2',userId:'u2',status:'GOING',respondedAt:now-3600000*6,updatedAt:now-3600000*6},
+    {id:'r7',eventId:'ev2',userId:'u4',status:'MAYBE',respondedAt:now-3600000*5,updatedAt:now-3600000*5},
+    {id:'r8',eventId:'ev3',userId:'u3',status:'GOING',respondedAt:now-3600000*8,updatedAt:now-3600000*8},
+    {id:'r9',eventId:'ev3',userId:'u6',status:'GOING',respondedAt:now-3600000*7,updatedAt:now-3600000*7},
+    {id:'r10',eventId:'ev3',userId:'u7',status:'MAYBE',respondedAt:now-3600000*2,updatedAt:now-3600000*2},
+    {id:'r11',eventId:'ev4',userId:'u2',status:'GOING',respondedAt:now-3600000*4,updatedAt:now-3600000*4},
+    {id:'r12',eventId:'ev5',userId:'u3',status:'GOING',respondedAt:now-86400000*8,updatedAt:now-86400000*8},
+    {id:'r13',eventId:'ev5',userId:'u4',status:'GOING',respondedAt:now-86400000*8,updatedAt:now-86400000*8},
+  ];
+  DB.rsvps.push(...rsvps);
+
+  const announcements = [
+    {id:'a1',eventId:'ev1',title:'Lunch will be provided!',message:'We are happy to announce that lunch and refreshments will be provided for all registered attendees on the day of the workshop. No need to bring anything — just come ready to learn!',createdAt:now-3600000*10},
+    {id:'a2',eventId:'ev1',title:'Pre-reading material uploaded',message:'Please review the pre-reading PDF on Cloud Architecture posted in the event resources section. This will help you get the most out of the session.',createdAt:now-3600000*6},
+    {id:'a3',eventId:'ev3',title:'New speaker confirmed: Dr. Riya Mehta',message:'We are thrilled to announce Dr. Riya Mehta (Research Lead, Google DeepMind) will deliver a keynote on ML infrastructure at scale.',createdAt:now-3600000*3},
+  ];
+  DB.announcements.push(...announcements);
+
+  const notifications = [
+    {id:'n1',userId:'u2',eventId:'ev1',type:'RSVP_CONFIRMED',message:'Your RSVP for Cloud Computing Workshop is confirmed as Going.',read:false,createdAt:now-3600000*5},
+    {id:'n2',userId:'u2',eventId:'ev1',type:'ANNOUNCEMENT',message:'New announcement from Cloud Computing Workshop: "Lunch will be provided!"',read:false,createdAt:now-3600000*4},
+    {id:'n3',userId:'u3',eventId:'ev1',type:'RSVP_CONFIRMED',message:'Your RSVP for Cloud Computing Workshop is confirmed as Maybe.',read:true,createdAt:now-3600000*4},
+    {id:'n4',userId:'u4',eventId:'ev1',type:'RSVP_CONFIRMED',message:'Your RSVP for Cloud Computing Workshop is confirmed as Going.',read:false,createdAt:now-3600000*3},
+    {id:'n5',userId:'u3',eventId:'ev3',type:'ANNOUNCEMENT',message:'New speaker confirmed for AI/ML in Production: Dr. Riya Mehta!',read:false,createdAt:now-3600000*2},
+    {id:'n6',userId:'u6',eventId:'ev3',type:'ANNOUNCEMENT',message:'New speaker confirmed for AI/ML in Production: Dr. Riya Mehta!',read:true,createdAt:now-3600000*2},
+  ];
+  DB.notifications.push(...notifications);
+}
+
+// ══ STATE ══
+let currentUser = null;
+let currentPage = '';
+let rtInterval = null;
+let editEventId = null;
+let selectedRole = 'ATTENDEE';
+let rsvpIdCounter = 100;
+let notifIdCounter = 100;
+let annIdCounter = 50;
+
+// ══════════════════════════════════════════════════
+// AUTH
+// ══════════════════════════════════════════════════
+function switchAuthTab(tab) {
+  document.getElementById('login-form').style.display = tab==='login'?'block':'none';
+  document.getElementById('register-form').style.display = tab==='register'?'block':'none';
+  document.querySelectorAll('.auth-tab').forEach((el,i) => el.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='register')));
+}
+function selectRole(role) {
+  selectedRole = role;
+  document.getElementById('rp-att').classList.toggle('selected', role==='ATTENDEE');
+  document.getElementById('rp-org').classList.toggle('selected', role==='ORGANIZER');
+}
+function quickLogin(email, pass) {
+  document.getElementById('login-email').value = email;
+  document.getElementById('login-password').value = pass;
+  doLogin();
+}
+function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-password').value;
+  const err   = document.getElementById('login-error');
+  err.textContent = '';
+  const user = DB.users.find(u => u.email===email && u.password===pass);
+  if (!user) { err.textContent = 'Invalid email or password.'; return; }
+  loginUser(user);
+}
+function doRegister() {
+  const name  = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass  = document.getElementById('reg-password').value;
+  const err   = document.getElementById('reg-error');
+  err.textContent = '';
+  if (!name||!email||!pass) { err.textContent='All fields required.'; return; }
+  if (pass.length<6) { err.textContent='Password must be at least 6 characters.'; return; }
+  if (DB.users.find(u=>u.email===email)) { err.textContent='Email already registered.'; return; }
+  const newUser = {id:'u'+Date.now(),name,email,password:pass,role:selectedRole,createdAt:Date.now()};
+  DB.users.push(newUser);
+  addNotification(newUser.id, null, 'SYSTEM', `Welcome to EventFlow, ${name}! Start exploring events.`);
+  loginUser(newUser);
+  toast('Account created successfully!','success');
+}
+function loginUser(user) {
+  currentUser = user;
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  buildSidebar();
+  startRealtime();
+  if (user.role==='ORGANIZER') navigate('org-dashboard');
+  else navigate('att-dashboard');
+  updateNotifBadge();
+}
+function doLogout() {
+  currentUser = null;
+  if (rtInterval) clearInterval(rtInterval);
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('login-email').value='';
+  document.getElementById('login-password').value='';
+  document.getElementById('login-error').textContent='';
+}
+
+// ══════════════════════════════════════════════════
+// SIDEBAR & NAVIGATION
+// ══════════════════════════════════════════════════
+function buildSidebar() {
+  const u = currentUser;
+  const avatar = document.getElementById('sidebar-avatar');
+  avatar.textContent = u.name[0].toUpperCase();
+  avatar.className = 'avatar ' + (u.role==='ORGANIZER'?'org':'att');
+  document.getElementById('sidebar-name').textContent = u.name;
+  document.getElementById('sidebar-role').textContent = u.role === 'ORGANIZER' ? '🗂 Organizer' : '🎟 Attendee';
+
+  const isOrg = u.role==='ORGANIZER';
+  const navData = isOrg ? [
+    {section:'Overview'},
+    {id:'org-dashboard',icon:svgIcon('grid'),label:'Dashboard'},
+    {id:'all-events',icon:svgIcon('calendar'),label:'All Events'},
+    {section:'Organizer'},
+    {id:'analytics',icon:svgIcon('bar-chart'),label:'Analytics'},
+    {id:'announcements',icon:svgIcon('bell'),label:'Announcements'},
+    {section:'Reference'},
+    {id:'architecture',icon:svgIcon('cpu'),label:'Cloud Architecture'},
+  ] : [
+    {section:'Overview'},
+    {id:'att-dashboard',icon:svgIcon('grid'),label:'Dashboard'},
+    {id:'all-events',icon:svgIcon('search'),label:'Browse Events'},
+    {section:'My Activity'},
+    {id:'my-rsvps',icon:svgIcon('check-circle'),label:'My RSVPs'},
+    {id:'announcements',icon:svgIcon('bell'),label:'Announcements'},
+    {section:'Reference'},
+    {id:'architecture',icon:svgIcon('cpu'),label:'Cloud Architecture'},
+  ];
+
+  const nav = document.getElementById('nav-links');
+  nav.innerHTML = '';
+  navData.forEach(item => {
+    if (item.section) {
+      nav.innerHTML += `<div class="nav-section">${item.section}</div>`;
+    } else {
+      nav.innerHTML += `<div class="nav-item" id="nav-${item.id}" onclick="navigate('${item.id}')">${item.icon}<span>${item.label}</span></div>`;
+    }
+  });
+}
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const pageEl = document.getElementById('page-'+page);
+  if (!pageEl) return;
+  pageEl.classList.add('active');
+  const navItem = document.getElementById('nav-'+page);
+  if (navItem) navItem.classList.add('active');
+  currentPage = page;
+  renderPage(page);
+  const titles = {'org-dashboard':'Dashboard','att-dashboard':'Dashboard','all-events':'All Events','my-rsvps':'My RSVPs','analytics':'Analytics','announcements':'Announcements','event-detail':'Event Detail','architecture':'Cloud Architecture'};
+  document.getElementById('topbar-title').textContent = titles[page]||page;
+}
+function svgIcon(name) {
+  const icons = {
+    grid:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`,
+    calendar:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+    'bar-chart':`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
+    bell:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
+    cpu:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>`,
+    search:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>`,
+    'check-circle':`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
+  };
+  return icons[name]||'';
+}
+
+// ══════════════════════════════════════════════════
+// PAGE RENDERERS
+// ══════════════════════════════════════════════════
+function renderPage(page) {
+  if (page==='org-dashboard') renderOrgDashboard();
+  else if (page==='att-dashboard') renderAttDashboard();
+  else if (page==='all-events') renderAllEvents();
+  else if (page==='my-rsvps') renderMyRsvps();
+  else if (page==='analytics') renderAnalytics();
+  else if (page==='announcements') renderAnnouncements();
+  else if (page==='architecture') renderArchitecture();
+}
+
+// ── ORGANIZER DASHBOARD ──
+function renderOrgDashboard() {
+  const myEvents = DB.events.filter(e=>e.organizerId===currentUser.id);
+  const myEventIds = myEvents.map(e=>e.id);
+  const allMyRsvps = DB.rsvps.filter(r=>myEventIds.includes(r.eventId));
+  const going = allMyRsvps.filter(r=>r.status==='GOING').length;
+  const maybe = allMyRsvps.filter(r=>r.status==='MAYBE').length;
+  const notGoing = allMyRsvps.filter(r=>r.status==='NOT_GOING').length;
+  const activeEvents = myEvents.filter(e=>e.status==='PUBLISHED').length;
+
+  document.getElementById('org-stats').innerHTML = `
+    <div class="stat-card blue"><div class="stat-label">Total Events</div><div class="stat-value">${myEvents.length}</div><div class="stat-sub">${activeEvents} published</div></div>
+    <div class="stat-card green"><div class="stat-label">Going</div><div class="stat-value">${going}</div><div class="stat-sub">confirmed attendees</div></div>
+    <div class="stat-card yellow"><div class="stat-label">Maybe</div><div class="stat-value">${maybe}</div><div class="stat-sub">undecided</div></div>
+    <div class="stat-card red"><div class="stat-label">Not Going</div><div class="stat-value">${notGoing}</div><div class="stat-sub">declined</div></div>
+    <div class="stat-card purple"><div class="stat-label">Total Responses</div><div class="stat-value">${going+maybe+notGoing}</div><div class="stat-sub">across all events</div></div>`;
+
+  // Live monitor for first published event
+  const firstLive = myEvents.find(e=>e.status==='PUBLISHED');
+  updateLiveMonitor(firstLive);
+
+  // Bar chart
+  renderRsvpBarChart(going, maybe, notGoing);
+
+  // Events grid
+  const grid = document.getElementById('org-events-grid');
+  if (myEvents.length===0) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📅</div><div class="empty-title">No events yet</div><div class="empty-desc">Create your first event to start tracking RSVPs in real time</div><button class="btn btn-primary" onclick="openCreateEvent()">+ Create Event</button></div>`;
+  } else {
+    grid.innerHTML = myEvents.map(e=>eventCard(e, true)).join('');
+  }
+}
+
+function updateLiveMonitor(event) {
+  if (!event) return;
+  const rsvps = DB.rsvps.filter(r=>r.eventId===event.id);
+  const going = rsvps.filter(r=>r.status==='GOING').length;
+  const maybe = rsvps.filter(r=>r.status==='MAYBE').length;
+  const notGoing = rsvps.filter(r=>r.status==='NOT_GOING').length;
+  const cap = event.maximumCapacity;
+  const pct = cap>0 ? Math.min(100,Math.round(going/cap*100)) : 0;
+
+  setRT('rt-going', going);
+  setRT('rt-maybe', maybe);
+  setRT('rt-not-going', notGoing);
+  document.getElementById('live-event-label').textContent = event.eventName.length>30?event.eventName.slice(0,30)+'…':event.eventName;
+  const fill = document.getElementById('cap-bar-fill');
+  if (fill) {
+    fill.style.width = pct+'%';
+    fill.className = 'capacity-fill ' + (pct<50?'cap-low':pct<75?'cap-mid':pct<95?'cap-high':'cap-full');
+  }
+  if (document.getElementById('cap-label-right')) document.getElementById('cap-label-right').textContent = `${going} / ${cap}`;
+}
+
+function renderRsvpBarChart(going, maybe, notGoing) {
+  const max = Math.max(going, maybe, notGoing, 1);
+  document.getElementById('rsvp-bar-chart').innerHTML = `
+    <div class="bar-group"><div class="bar green" style="height:${(going/max*70)+4}px"></div><div class="bar-label">Going<br>${going}</div></div>
+    <div class="bar-group"><div class="bar yellow" style="height:${(maybe/max*70)+4}px"></div><div class="bar-label">Maybe<br>${maybe}</div></div>
+    <div class="bar-group"><div class="bar red" style="height:${(notGoing/max*70)+4}px"></div><div class="bar-label">Not<br>${notGoing}</div></div>`;
+}
+
+// ── ATTENDEE DASHBOARD ──
+function renderAttDashboard() {
+  const myRsvps = DB.rsvps.filter(r=>r.userId===currentUser.id);
+  const goingRsvps = myRsvps.filter(r=>r.status==='GOING');
+  const upcoming = DB.events.filter(e=>e.status==='PUBLISHED'&&new Date(e.eventDate)>=new Date());
+
+  document.getElementById('att-stats').innerHTML = `
+    <div class="stat-card green"><div class="stat-label">Events Going</div><div class="stat-value">${goingRsvps.length}</div><div class="stat-sub">confirmed attendance</div></div>
+    <div class="stat-card yellow"><div class="stat-label">Maybe</div><div class="stat-value">${myRsvps.filter(r=>r.status==='MAYBE').length}</div></div>
+    <div class="stat-card blue"><div class="stat-label">Upcoming Events</div><div class="stat-value">${upcoming.length}</div><div class="stat-sub">available to join</div></div>
+    <div class="stat-card purple"><div class="stat-label">Total RSVPs</div><div class="stat-value">${myRsvps.length}</div></div>`;
+
+  const grid = document.getElementById('att-events-grid');
+  if (upcoming.length===0) {
+    grid.innerHTML=`<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🎉</div><div class="empty-title">No upcoming events</div><div class="empty-desc">Check back later for new events</div></div>`;
+  } else {
+    grid.innerHTML = upcoming.map(e=>eventCard(e,false)).join('');
+  }
+}
+
+// ── ALL EVENTS ──
+function renderAllEvents() {
+  const q = (document.getElementById('event-search')||{}).value||'';
+  const events = DB.events.filter(e=>e.status!=='DRAFT'&&(!q||(e.eventName+e.description+e.eventType).toLowerCase().includes(q.toLowerCase())));
+  const grid = document.getElementById('all-events-grid');
+  if (events.length===0) {
+    grid.innerHTML=`<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🔍</div><div class="empty-title">No events found</div></div>`;
+  } else {
+    grid.innerHTML = events.map(e=>eventCard(e,currentUser.role==='ORGANIZER'&&e.organizerId===currentUser.id)).join('');
+  }
+}
+
+// ── EVENT CARD ──
+function eventCard(event, isOrg) {
+  const rsvps = DB.rsvps.filter(r=>r.eventId===event.id);
+  const going = rsvps.filter(r=>r.status==='GOING').length;
+  const cap = event.maximumCapacity;
+  const pct = cap>0?Math.min(100,Math.round(going/cap*100)):0;
+  const myRsvp = DB.rsvps.find(r=>r.eventId===event.id&&r.userId===currentUser.id);
+  const isPast = new Date(event.eventDate)<new Date();
+  return `<div class="event-card" onclick="openEventDetail('${event.id}')">
+    <div class="event-card-top">
+      <div class="event-card-type">${event.eventType}</div>
+      <div class="event-card-name">${event.eventName}</div>
+      <div class="event-card-desc">${event.description}</div>
+    </div>
+    <div class="event-card-meta">
+      <span class="meta-chip">📅 ${fmtDate(event.eventDate)}</span>
+      <span class="meta-chip">⏰ ${event.startTime}</span>
+      <span class="meta-chip">📍 ${event.venue.length>20?event.venue.slice(0,20)+'…':event.venue}</span>
+    </div>
+    <div class="event-card-footer">
+      <div class="rsvp-bar-wrap">
+        <div class="rsvp-bar"><div class="rsvp-bar-fill" style="width:${pct}%"></div></div>
+        <div class="rsvp-bar-label">${going}/${cap} going${myRsvp?' · You: '+statusLabel(myRsvp.status):''}</div>
+      </div>
+      <span class="status-badge status-${event.status}">${event.status}</span>
+    </div>
+  </div>`;
+}
+
+// ── EVENT DETAIL ──
+function openEventDetail(eventId) {
+  const event = DB.events.find(e=>e.id===eventId);
+  if (!event) return;
+  navigate('event-detail');
+  document.getElementById('topbar-title').textContent = event.eventName;
+
+  const rsvps = DB.rsvps.filter(r=>r.eventId===eventId);
+  const going = rsvps.filter(r=>r.status==='GOING').length;
+  const maybe = rsvps.filter(r=>r.status==='MAYBE').length;
+  const notGoing = rsvps.filter(r=>r.status==='NOT_GOING').length;
+  const myRsvp = DB.rsvps.find(r=>r.eventId===eventId&&r.userId===currentUser.id);
+  const isOrg = event.organizerId===currentUser.id;
+  const isPast = new Date(event.eventDate)<new Date();
+  const isDeadlinePast = event.registrationDeadline && new Date(event.registrationDeadline)<new Date();
+  const isFull = event.status==='FULL'||going>=event.maximumCapacity;
+  const announcements = DB.announcements.filter(a=>a.eventId===eventId);
+  const waitlisted = DB.waitlist.filter(w=>w.eventId===eventId);
+  const cap = event.maximumCapacity;
+  const pct = cap>0?Math.min(100,Math.round(going/cap*100)):0;
+
+  let attendeeList = '';
+  if (isOrg) {
+    const goingUsers = rsvps.filter(r=>r.status==='GOING').map(r=>DB.users.find(u=>u.id===r.userId)).filter(Boolean);
+    attendeeList = `<div class="card" style="margin-top:16px"><div class="card-header"><span class="card-title">Attendees (Going)</span></div><div class="card-body">
+      ${goingUsers.length===0?'<p class="text-muted text-small">No confirmed attendees yet.</p>':
+      `<table class="data-table"><thead><tr><th>Name</th><th>Email</th><th>RSVP Time</th></tr></thead><tbody>
+        ${goingUsers.map(u=>{const r=rsvps.find(rv=>rv.userId===u.id);return`<tr><td>${u.name}</td><td>${u.email}</td><td>${fmtTime(r.respondedAt)}</td></tr>`}).join('')}
+      </tbody></table>`}
+    </div></div>`;
+  }
+
+  let waitlistSection = '';
+  if (isOrg && waitlisted.length>0) {
+    waitlistSection = `<div class="card" style="margin-top:16px"><div class="card-header"><span class="card-title">Waitlist (${waitlisted.length})</span></div><div class="card-body">
+      <table class="data-table"><thead><tr><th>#</th><th>Name</th><th>Joined</th></tr></thead><tbody>
+        ${waitlisted.map((w,i)=>{const u=DB.users.find(x=>x.id===w.userId);return`<tr><td>${i+1}</td><td>${u?u.name:'?'}</td><td>${fmtTime(w.joinedAt)}</td></tr>`}).join('')}
+      </tbody></table>
+    </div></div>`;
+  }
+
+  let rsvpSection = '';
+  if (!isOrg && event.status!=='CANCELLED') {
+    if (isPast) {
+      rsvpSection = `<div class="alert info">This event has already taken place.</div>`;
+    } else if (isDeadlinePast) {
+      rsvpSection = `<div class="alert warning">Registration deadline has passed (${fmtDate(event.registrationDeadline)}).</div>`;
+    } else {
+      rsvpSection = `<div class="card" style="margin-top:16px"><div class="card-header"><span class="card-title">Your RSVP</span>${myRsvp?`<span class="status-badge status-PUBLISHED">${statusLabel(myRsvp.status)}</span>`:''}</div><div class="card-body">
+        <div class="rsvp-group">
+          <button class="rsvp-opt ${myRsvp&&myRsvp.status==='GOING'?'selected-GOING':''}" onclick="submitRsvp('${eventId}','GOING')" ${isFull&&(!myRsvp||myRsvp.status!=='GOING')?'disabled':''}>✅ Going</button>
+          <button class="rsvp-opt ${myRsvp&&myRsvp.status==='MAYBE'?'selected-MAYBE':''}" onclick="submitRsvp('${eventId}','MAYBE')">🤔 Maybe</button>
+          <button class="rsvp-opt ${myRsvp&&myRsvp.status==='NOT_GOING'?'selected-NOT_GOING':''}" onclick="submitRsvp('${eventId}','NOT_GOING')">❌ Not Going</button>
+        </div>
+        ${isFull&&(!myRsvp||myRsvp.status!=='GOING')?`<div class="alert warning" style="margin-top:10px">This event is full. ${waitlisted.find(w=>w.userId===currentUser.id)?'You are on the waitlist.':'<button class="btn btn-sm btn-secondary" onclick="joinWaitlist(\''+eventId+'\')">Join Waitlist</button>'}</div>`:''}
+        ${myRsvp&&myRsvp.status==='GOING'?`<div class="alert success" style="margin-top:10px">🎉 You're confirmed for this event!</div>`:''}
+        ${myRsvp?`<div style="margin-top:10px"><button class="btn btn-ghost btn-sm" onclick="cancelRsvp('${eventId}')">Remove my RSVP</button></div>`:''}
+      </div></div>`;
+    }
+  }
+
+  let orgActions = '';
+  if (isOrg) {
+    orgActions = `<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <button class="btn btn-secondary btn-sm" onclick="openEditEvent('${eventId}')">✏️ Edit</button>
+      <button class="btn btn-secondary btn-sm" onclick="openAnnouncement('${eventId}')">📢 Announce</button>
+      ${event.status!=='CANCELLED'?`<button class="btn btn-danger btn-sm" onclick="cancelEvent('${eventId}')">Cancel Event</button>`:''}
+    </div>`;
+  }
+
+  document.getElementById('event-detail-content').innerHTML = `
+    <div style="max-width:760px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--accent);margin-bottom:6px">${event.eventType}</div>
+          <h2 style="font-size:24px;font-weight:800;letter-spacing:-.5px;margin-bottom:4px">${event.eventName}</h2>
+          <p class="text-muted text-small">Organized by ${event.organizerName}</p>
+        </div>
+        <span class="status-badge status-${event.status}" style="padding:5px 12px;font-size:11px">${event.status}</span>
+      </div>
+      ${orgActions}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div class="card"><div class="card-body">
+          <div class="rt-counter" style="margin-bottom:14px">
+            <div class="rt-count going"><div class="rt-num" id="det-going">${going}</div><div class="rt-label" style="color:var(--green)">Going</div></div>
+            <div style="color:var(--border2);font-size:20px">·</div>
+            <div class="rt-count maybe"><div class="rt-num" id="det-maybe">${maybe}</div><div class="rt-label" style="color:var(--yellow)">Maybe</div></div>
+            <div style="color:var(--border2);font-size:20px">·</div>
+            <div class="rt-count not-going"><div class="rt-num" id="det-not-going">${notGoing}</div><div class="rt-label" style="color:var(--red)">Not Going</div></div>
+          </div>
+          <div class="capacity-bar"><div class="capacity-fill ${pct<50?'cap-low':pct<75?'cap-mid':pct<95?'cap-high':'cap-full'}" style="width:${pct}%"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted)">
+            <span>Capacity: ${cap}</span><span>${going}/${cap} (${pct}%)</span>
+          </div>
+        </div></div>
+        <div class="card"><div class="card-body">
+          <div class="detail-row"><div class="dkey">📅 Date</div><div class="dval">${fmtDate(event.eventDate)}</div></div>
+          <div class="detail-row"><div class="dkey">⏰ Time</div><div class="dval">${event.startTime} – ${event.endTime}</div></div>
+          <div class="detail-row"><div class="dkey">📍 Venue</div><div class="dval">${event.venue}</div></div>
+          ${event.onlineLink?`<div class="detail-row"><div class="dkey">🔗 Link</div><div class="dval"><a href="${event.onlineLink}" target="_blank" style="color:var(--accent);text-decoration:none">${event.onlineLink.slice(0,40)}…</a></div></div>`:''}
+          <div class="detail-row"><div class="dkey">📋 Deadline</div><div class="dval">${event.registrationDeadline?fmtDate(event.registrationDeadline):'None'}</div></div>
+        </div></div>
+      </div>
+      <div class="card" style="margin-bottom:16px"><div class="card-body">
+        <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">ABOUT</div>
+        <p style="font-size:14px;line-height:1.7">${event.description}</p>
+      </div></div>
+      ${rsvpSection}
+      ${announcements.length>0?`<div style="margin-top:16px"><div class="section-header"><span class="section-title">Announcements</span></div>${announcements.map(a=>`<div class="announcement"><div class="ann-title">${a.title}</div><div class="ann-body">${a.message}</div><div class="ann-meta">${fmtTime(a.createdAt)}</div></div>`).join('')}</div>`:''}
+      ${attendeeList}
+      ${waitlistSection}
+    </div>`;
+}
+
+// ── RSVP LOGIC ──
+function submitRsvp(eventId, status) {
+  // AUTH CHECK
+  if (!currentUser) { toast('Please log in.','error'); return; }
+
+  const event = DB.events.find(e=>e.id===eventId);
+  if (!event) return;
+  if (event.organizerId===currentUser.id) { toast('Organizers cannot RSVP to own events.','warning'); return; }
+  if (event.status==='CANCELLED') { toast('This event has been cancelled.','error'); return; }
+
+  // REGISTRATION DEADLINE CHECK
+  if (event.registrationDeadline && new Date(event.registrationDeadline)<new Date()) {
+    toast('Registration deadline has passed.','warning'); return;
+  }
+
+  // ─ CONCURRENCY-SAFE CAPACITY CHECK (Atomic transaction simulation) ─
+  // In production: database transaction / conditional write (Firestore transaction,
+  // PostgreSQL row-lock + UPDATE WHERE going_count < capacity)
+  if (status==='GOING') {
+    const goingCount = DB.rsvps.filter(r=>r.eventId===eventId&&r.status==='GOING'&&r.userId!==currentUser.id).length;
+    if (goingCount >= event.maximumCapacity) {
+      toast('Event is full! You can join the waitlist.','warning');
+      if (event.status!=='FULL') {
+        event.status = 'FULL';
+      }
+      return;
+    }
+  }
+
+  const now = Date.now();
+  const existing = DB.rsvps.find(r=>r.eventId===eventId&&r.userId===currentUser.id);
+
+  if (existing) {
+    // UPDATE (upsert — unique constraint: event_id + user_id)
+    const old = existing.status;
+    existing.status = status;
+    existing.updatedAt = now;
+    addNotification(currentUser.id, eventId, 'RSVP_UPDATED', `Your RSVP for "${event.eventName}" updated to ${statusLabel(status)}.`);
+    toast(`RSVP updated to ${statusLabel(status)}!`, 'success');
+    if (old==='GOING'&&status!=='GOING') {
+      // Promote waitlist
+      promoteWaitlist(eventId);
+      if (event.status==='FULL') event.status='PUBLISHED';
+    }
+  } else {
+    // CREATE
+    const newRsvp = {id:'r'+(++rsvpIdCounter),eventId,userId:currentUser.id,status,respondedAt:now,updatedAt:now};
+    DB.rsvps.push(newRsvp);
+    addNotification(currentUser.id, eventId, 'RSVP_CONFIRMED', `Your RSVP for "${event.eventName}" is confirmed as ${statusLabel(status)}.`);
+    toast(`RSVP recorded as ${statusLabel(status)}!`, 'success');
+  }
+
+  // CHECK CAPACITY
+  const going = DB.rsvps.filter(r=>r.eventId===eventId&&r.status==='GOING').length;
+  if (going>=event.maximumCapacity) event.status='FULL';
+
+  // REAL-TIME PUSH to organizer dashboard
+  triggerRealtimeUpdate(eventId);
+
+  // Re-render detail
+  openEventDetail(eventId);
+  updateNotifBadge();
+}
+
+function cancelRsvp(eventId) {
+  const idx = DB.rsvps.findIndex(r=>r.eventId===eventId&&r.userId===currentUser.id);
+  if (idx===-1) return;
+  const old = DB.rsvps[idx];
+  DB.rsvps.splice(idx,1);
+  const event = DB.events.find(e=>e.id===eventId);
+  if (event&&event.status==='FULL') {
+    promoteWaitlist(eventId);
+    event.status='PUBLISHED';
+  }
+  toast('RSVP removed.','success');
+  triggerRealtimeUpdate(eventId);
+  openEventDetail(eventId);
+  updateNotifBadge();
+}
+
+function joinWaitlist(eventId) {
+  const event = DB.events.find(e=>e.id===eventId);
+  if (!event) return;
+  if (DB.waitlist.find(w=>w.eventId===eventId&&w.userId===currentUser.id)) {
+    toast('You are already on the waitlist.','warning'); return;
+  }
+  DB.waitlist.push({id:'w'+Date.now(),eventId,userId:currentUser.id,joinedAt:Date.now()});
+  addNotification(currentUser.id,eventId,'WAITLIST','You\'ve been added to the waitlist for "'+event.eventName+'".');
+  toast('You\'re on the waitlist!','success');
+  openEventDetail(eventId);
+  updateNotifBadge();
+}
+
+function promoteWaitlist(eventId) {
+  const first = DB.waitlist.find(w=>w.eventId===eventId);
+  if (!first) return;
+  DB.waitlist.splice(DB.waitlist.indexOf(first),1);
+  const event = DB.events.find(e=>e.id===eventId);
+  const u = DB.users.find(u=>u.id===first.userId);
+  // Auto-add RSVP as GOING
+  const existing = DB.rsvps.find(r=>r.eventId===eventId&&r.userId===first.userId);
+  if (!existing) {
+    DB.rsvps.push({id:'r'+(++rsvpIdCounter),eventId,userId:first.userId,status:'GOING',respondedAt:Date.now(),updatedAt:Date.now()});
+  }
+  addNotification(first.userId, eventId, 'WAITLIST_PROMOTED', `🎉 Great news! A seat opened up — you've been promoted from the waitlist for "${event?event.eventName:'event'}".`);
+  triggerRealtimeUpdate(eventId);
+}
+
+// ── EVENT CRUD ──
+function openCreateEvent() {
+  editEventId = null;
+  document.getElementById('modal-event-title').textContent = 'Create Event';
+  document.getElementById('modal-event-save-btn').textContent = 'Create Event';
+  document.getElementById('edit-event-id').value = '';
+  ['ev-name','ev-desc','ev-venue','ev-link'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('ev-type').value='Workshop';
+  document.getElementById('ev-capacity').value=100;
+  const today = new Date();
+  document.getElementById('ev-date').value=fmtDateInput(new Date(today.getTime()+86400000*7));
+  document.getElementById('ev-deadline').value=fmtDateInput(new Date(today.getTime()+86400000*5));
+  document.getElementById('ev-start-time').value='10:00';
+  document.getElementById('ev-end-time').value='17:00';
+  document.getElementById('ev-status').value='PUBLISHED';
+  document.getElementById('modal-event-error').textContent='';
+  openModal('modal-event');
+}
+
+function openEditEvent(eventId) {
+  const ev = DB.events.find(e=>e.id===eventId);
+  if (!ev) return;
+  if (ev.organizerId!==currentUser.id) { toast('Unauthorized.','error'); return; }
+  editEventId = eventId;
+  document.getElementById('modal-event-title').textContent='Edit Event';
+  document.getElementById('modal-event-save-btn').textContent='Save Changes';
+  document.getElementById('edit-event-id').value=eventId;
+  document.getElementById('ev-name').value=ev.eventName;
+  document.getElementById('ev-desc').value=ev.description;
+  document.getElementById('ev-type').value=ev.eventType;
+  document.getElementById('ev-capacity').value=ev.maximumCapacity;
+  document.getElementById('ev-date').value=ev.eventDate;
+  document.getElementById('ev-deadline').value=ev.registrationDeadline||'';
+  document.getElementById('ev-start-time').value=ev.startTime;
+  document.getElementById('ev-end-time').value=ev.endTime;
+  document.getElementById('ev-venue').value=ev.venue;
+  document.getElementById('ev-link').value=ev.onlineLink||'';
+  document.getElementById('ev-status').value=ev.status;
+  document.getElementById('modal-event-error').textContent='';
+  openModal('modal-event');
+}
+
+function saveEvent() {
+  const name = document.getElementById('ev-name').value.trim();
+  const desc = document.getElementById('ev-desc').value.trim();
+  const type = document.getElementById('ev-type').value;
+  const cap  = parseInt(document.getElementById('ev-capacity').value);
+  const date = document.getElementById('ev-date').value;
+  const deadline = document.getElementById('ev-deadline').value;
+  const start = document.getElementById('ev-start-time').value;
+  const end   = document.getElementById('ev-end-time').value;
+  const venue = document.getElementById('ev-venue').value.trim();
+  const link  = document.getElementById('ev-link').value.trim();
+  const status = document.getElementById('ev-status').value;
+  const err = document.getElementById('modal-event-error');
+  err.textContent='';
+
+  if (!name||!desc||!date||!venue) { err.textContent='Name, description, date, and venue are required.'; return; }
+  if (!cap||cap<1) { err.textContent='Capacity must be at least 1.'; return; }
+  if (start>=end) { err.textContent='End time must be after start time.'; return; }
+  if (deadline&&deadline>date) { /* ok */ }
+
+  const now = Date.now();
+  if (editEventId) {
+    const ev = DB.events.find(e=>e.id===editEventId);
+    if (!ev||ev.organizerId!==currentUser.id) { toast('Unauthorized.','error'); return; }
+    Object.assign(ev,{eventName:name,description:desc,eventType:type,maximumCapacity:cap,eventDate:date,registrationDeadline:deadline,startTime:start,endTime:end,venue,onlineLink:link,status,updatedAt:now});
+    // Notify RSVPed users
+    const rsvpUsers = DB.rsvps.filter(r=>r.eventId===editEventId).map(r=>r.userId);
+    rsvpUsers.forEach(uid=>addNotification(uid,editEventId,'EVENT_UPDATED',`Event updated: "${name}" has been modified.`));
+    toast('Event updated!','success');
+  } else {
+    const newEvent = {id:'ev'+Date.now(),organizerId:currentUser.id,organizerName:currentUser.name,eventName:name,description:desc,eventType:type,eventDate:date,startTime:start,endTime:end,venue,onlineLink:link,maximumCapacity:cap,registrationDeadline:deadline,status,createdAt:now,updatedAt:now};
+    DB.events.push(newEvent);
+    toast('Event created!','success');
+  }
+
+  closeModal('modal-event');
+  if (currentPage==='org-dashboard') renderOrgDashboard();
+  else if (currentPage==='all-events') renderAllEvents();
+  updateNotifBadge();
+}
+
+function cancelEvent(eventId) {
+  const ev = DB.events.find(e=>e.id===eventId);
+  if (!ev||ev.organizerId!==currentUser.id) { toast('Unauthorized.','error'); return; }
+  if (!confirm(`Cancel "${ev.eventName}"? All attendees will be notified.`)) return;
+  ev.status='CANCELLED';
+  ev.updatedAt=Date.now();
+  const rsvpUsers = DB.rsvps.filter(r=>r.eventId===eventId).map(r=>r.userId);
+  rsvpUsers.forEach(uid=>addNotification(uid,eventId,'EVENT_CANCELLED',`Event cancelled: "${ev.eventName}" has been cancelled by the organizer.`));
+  toast('Event cancelled. Attendees notified.','warning');
+  triggerRealtimeUpdate(eventId);
+  openEventDetail(eventId);
+  updateNotifBadge();
+}
+
+// ── ANNOUNCEMENTS ──
+function openAnnouncement(eventId) {
+  document.getElementById('ann-event-id').value=eventId;
+  document.getElementById('ann-title').value='';
+  document.getElementById('ann-msg').value='';
+  document.getElementById('ann-error').textContent='';
+  openModal('modal-ann');
+}
+
+function saveAnnouncement() {
+  const eventId = document.getElementById('ann-event-id').value;
+  const title   = document.getElementById('ann-title').value.trim();
+  const msg     = document.getElementById('ann-msg').value.trim();
+  const err     = document.getElementById('ann-error');
+  err.textContent='';
+  if (!title||!msg) { err.textContent='Title and message required.'; return; }
+  const event = DB.events.find(e=>e.id===eventId);
+  if (!event||event.organizerId!==currentUser.id) { toast('Unauthorized.','error'); return; }
+  DB.announcements.push({id:'a'+(++annIdCounter),eventId,title,message:msg,createdAt:Date.now()});
+  // Notify RSVPed users
+  const rsvpUsers = DB.rsvps.filter(r=>r.eventId===eventId).map(r=>r.userId);
+  rsvpUsers.forEach(uid=>addNotification(uid,eventId,'ANNOUNCEMENT',`📢 "${event.eventName}": ${title}`));
+  closeModal('modal-ann');
+  toast('Announcement published!','success');
+  openEventDetail(eventId);
+  updateNotifBadge();
+}
+
+// ── MY RSVPs ──
+function renderMyRsvps() {
+  const myRsvps = DB.rsvps.filter(r=>r.userId===currentUser.id);
+  ['GOING','MAYBE','NOT_GOING','ALL'].forEach(status=>{
+    const filtered = status==='ALL'?myRsvps:myRsvps.filter(r=>r.status===status);
+    const id = status==='NOT_GOING'?'rsvp-not':status==='ALL'?'rsvp-all':'rsvp-'+status.toLowerCase();
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (filtered.length===0) {
+      el.innerHTML=`<div class="empty-state"><div class="empty-icon">${status==='GOING'?'✅':status==='MAYBE'?'🤔':status==='NOT_GOING'?'❌':'📋'}</div><div class="empty-title">No ${status.toLowerCase()} RSVPs</div></div>`;
+    } else {
+      el.innerHTML='<div class="events-grid">'+filtered.map(r=>{
+        const ev = DB.events.find(e=>e.id===r.eventId);
+        if (!ev) return '';
+        return `<div class="event-card" onclick="openEventDetail('${ev.id}')">
+          <div class="event-card-top"><div class="event-card-type">${ev.eventType}</div><div class="event-card-name">${ev.eventName}</div></div>
+          <div class="event-card-meta"><span class="meta-chip">📅 ${fmtDate(ev.eventDate)}</span><span class="meta-chip">📍 ${ev.venue.slice(0,20)}</span></div>
+          <div class="event-card-footer">
+            <div class="rsvp-bar-label">Status: <strong style="color:${r.status==='GOING'?'var(--green)':r.status==='MAYBE'?'var(--yellow)':'var(--red)'}">${statusLabel(r.status)}</strong></div>
+            <span class="status-badge status-${ev.status}">${ev.status}</span>
+          </div>
+        </div>`;
+      }).join('')+'</div>';
+    }
+  });
+}
+
+// ── ANALYTICS ──
+function renderAnalytics() {
+  const myEvents = DB.events.filter(e=>e.organizerId===currentUser.id);
+  if (myEvents.length===0) {
+    document.getElementById('analytics-content').innerHTML=`<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-title">No events to analyze</div><div class="empty-desc">Create events to see analytics</div></div>`;
+    return;
+  }
+
+  let html = '<div class="section-header"><span class="section-title">Event Analytics</span></div>';
+  html += '<div class="stat-grid">';
+  let totalGoing=0,totalMaybe=0,totalNot=0,totalCap=0;
+  myEvents.forEach(ev=>{
+    const r=DB.rsvps.filter(x=>x.eventId===ev.id);
+    totalGoing+=r.filter(x=>x.status==='GOING').length;
+    totalMaybe+=r.filter(x=>x.status==='MAYBE').length;
+    totalNot+=r.filter(x=>x.status==='NOT_GOING').length;
+    totalCap+=ev.maximumCapacity;
+  });
+  const totalResp=totalGoing+totalMaybe+totalNot;
+  const capUtil=totalCap>0?Math.round(totalGoing/totalCap*100):0;
+  html+=`<div class="stat-card green"><div class="stat-label">Total Going</div><div class="stat-value">${totalGoing}</div></div>
+    <div class="stat-card yellow"><div class="stat-label">Total Maybe</div><div class="stat-value">${totalMaybe}</div></div>
+    <div class="stat-card red"><div class="stat-label">Total Not Going</div><div class="stat-value">${totalNot}</div></div>
+    <div class="stat-card blue"><div class="stat-label">Total Responses</div><div class="stat-value">${totalResp}</div></div>
+    <div class="stat-card purple"><div class="stat-label">Capacity Utilization</div><div class="stat-value">${capUtil}%</div></div>`;
+  html += '</div>';
+
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">';
+  const maxBar=Math.max(totalGoing,totalMaybe,totalNot,1);
+  html+=`<div class="card"><div class="card-header"><span class="card-title">Overall RSVP Distribution</span></div><div class="card-body">
+    <div class="analytics-chart">
+      <div class="chart-bar-wrap"><div class="chart-bar" style="height:${(totalGoing/maxBar*100)}px;background:var(--green)"></div><div class="chart-x">Going<br>${totalGoing}</div></div>
+      <div class="chart-bar-wrap"><div class="chart-bar" style="height:${(totalMaybe/maxBar*100)}px;background:var(--yellow)"></div><div class="chart-x">Maybe<br>${totalMaybe}</div></div>
+      <div class="chart-bar-wrap"><div class="chart-bar" style="height:${(totalNot/maxBar*100)}px;background:var(--red)"></div><div class="chart-x">Not<br>${totalNot}</div></div>
+    </div>
+  </div></div>`;
+
+  // Per-event capacity utilization
+  const capData = myEvents.map(ev=>{
+    const going=DB.rsvps.filter(r=>r.eventId===ev.id&&r.status==='GOING').length;
+    return {name:ev.eventName.length>18?ev.eventName.slice(0,18)+'…':ev.eventName,going,cap:ev.maximumCapacity,pct:Math.round(going/ev.maximumCapacity*100)};
+  });
+  const maxCap=Math.max(...capData.map(d=>d.pct),1);
+  html+=`<div class="card"><div class="card-header"><span class="card-title">Capacity Utilization by Event</span></div><div class="card-body">
+    <div class="analytics-chart">${capData.map(d=>`<div class="chart-bar-wrap"><div class="chart-bar" style="height:${(d.pct/100*100)}px;background:${d.pct<50?'var(--green)':d.pct<80?'var(--yellow)':'var(--red)'}"></div><div class="chart-x">${d.name}<br>${d.pct}%</div></div>`).join('')}</div>
+  </div></div>`;
+  html += '</div>';
+
+  // Per-event table
+  html += `<div class="card"><div class="card-header"><span class="card-title">Per-Event Summary</span></div><div class="card-body">
+    <table class="data-table"><thead><tr><th>Event</th><th>Going</th><th>Maybe</th><th>Not Going</th><th>Capacity</th><th>Util %</th><th>Status</th></tr></thead><tbody>
+    ${myEvents.map(ev=>{
+      const r=DB.rsvps.filter(x=>x.eventId===ev.id);
+      const g=r.filter(x=>x.status==='GOING').length,m=r.filter(x=>x.status==='MAYBE').length,n=r.filter(x=>x.status==='NOT_GOING').length;
+      const pct=Math.round(g/ev.maximumCapacity*100);
+      return `<tr><td>${ev.eventName}</td><td style="color:var(--green)">${g}</td><td style="color:var(--yellow)">${m}</td><td style="color:var(--red)">${n}</td><td>${ev.maximumCapacity}</td><td>${pct}%</td><td><span class="status-badge status-${ev.status}">${ev.status}</span></td></tr>`;
+    }).join('')}
+    </tbody></table>
+  </div></div>`;
+
+  // Formula callout
+  html += `<div class="card" style="margin-top:16px"><div class="card-header"><span class="card-title">Analytics Formulas</span></div><div class="card-body">
+    <div class="code-block">Response Rate    = (Going + Maybe + Not Going) / Total Invited × 100
+Capacity Util   = Going / Max Capacity × 100
+Available Seats = Max Capacity − Going
+Conversion Rate = Going / Total Responses × 100
+
+Example — Cloud Computing Workshop:
+  Going = ${totalGoing} | Total Responses = ${totalResp}
+  Response Rate = ${totalResp} / (Total Invited) × 100
+  Capacity Util = ${totalGoing} / ${totalCap} × 100 = ${capUtil}%</div>
+  </div></div>`;
+
+  document.getElementById('analytics-content').innerHTML = html;
+}
+
+// ── ANNOUNCEMENTS PAGE ──
+function renderAnnouncements() {
+  const isOrg = currentUser.role==='ORGANIZER';
+  let events;
+  if (isOrg) {
+    events = DB.events.filter(e=>e.organizerId===currentUser.id);
+  } else {
+    const myRsvpEventIds = DB.rsvps.filter(r=>r.userId===currentUser.id).map(r=>r.eventId);
+    events = DB.events.filter(e=>myRsvpEventIds.includes(e.id));
+  }
+  let html = '<div class="section-header"><span class="section-title">Announcements</span></div>';
+  if (events.length===0) {
+    html += `<div class="empty-state"><div class="empty-icon">📢</div><div class="empty-title">No announcements</div><div class="empty-desc">${isOrg?'Create events and publish announcements.':'RSVP to events to see their announcements.'}</div></div>`;
+  } else {
+    events.forEach(ev=>{
+      const anns = DB.announcements.filter(a=>a.eventId===ev.id);
+      html += `<div style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-weight:600;font-size:14px">${ev.eventName}</span>
+          ${isOrg?`<button class="btn btn-secondary btn-sm" onclick="openAnnouncement('${ev.id}')">+ Post</button>`:''}
+        </div>
+        ${anns.length===0?`<p class="text-muted text-small">No announcements for this event yet.</p>`:anns.map(a=>`<div class="announcement"><div class="ann-title">${a.title}</div><div class="ann-body">${a.message}</div><div class="ann-meta">${fmtTime(a.createdAt)}</div></div>`).join('')}
+      </div>`;
+    });
+  }
+  document.getElementById('announcements-content').innerHTML=html;
+}
+
+// ── CLOUD ARCHITECTURE PAGE ──
+function renderArchitecture() {
+  document.getElementById('arch-content').innerHTML = `
+<div style="max-width:800px">
+  <div class="section-header"><span class="section-title">Cloud Architecture Reference</span></div>
+  <div class="alert info">This page documents the production cloud architecture this project demonstrates. The live demo runs in-browser; the architecture below maps to real cloud services.</div>
+
+  <div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">System Architecture (Option B — Recommended)</span></div><div class="card-body">
+  <div class="code-block">
+┌─────────────────────────────────────────────────────────┐
+│                   CLOUD ARCHITECTURE                     │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  Users (Browser / Mobile)                                │
+│       │                                                  │
+│       ▼                                                  │
+│  CDN (Cloud Storage / Vercel Edge)                       │
+│       │                                                  │
+│       ▼                                                  │
+│  React Frontend (SPA)                                    │
+│       │                     │                            │
+│       │ REST API             │ Real-Time Subscription    │
+│       ▼                     ▼                            │
+│  FastAPI Backend      Firestore / Supabase Realtime      │
+│  (Cloud Run /         (WebSocket / SSE)                  │
+│   App Engine)               │                            │
+│       │                     ▼                            │
+│       ▼             Organizer Dashboard                  │
+│  Auth Service               (live RSVP counter)          │
+│  (Firebase Auth /                                        │
+│   Supabase Auth)                                         │
+│       │                                                  │
+│       ▼                                                  │
+│  Cloud Database                                          │
+│  (Firestore / Supabase PostgreSQL)                       │
+│       │                                                  │
+│       ├── Cloud Functions (Serverless)                   │
+│       │   ├── Capacity check (atomic transaction)        │
+│       │   ├── Waitlist promotion                         │
+│       │   └── Notification dispatch                      │
+│       │                                                  │
+│       └── Notification Service                           │
+│           (FCM / Email / In-App)                         │
+│                                                          │
+│  Monitoring: Cloud Logging + Alerting                    │
+│  Security: HTTPS, JWT, RBAC, Input Validation            │
+└─────────────────────────────────────────────────────────┘</div>
+  </div></div>
+
+  <div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">Real-Time RSVP Flow</span></div><div class="card-body">
+  <div class="code-block">
+  Attendee clicks "Going"
+         │
+         ▼
+  Frontend sends POST /api/events/{id}/rsvp
+         │
+         ▼
+  Backend validates:
+    ✓ Auth token (JWT)
+    ✓ User role (not organizer of own event)
+    ✓ Registration deadline not passed
+    ✓ Event not cancelled
+         │
+         ▼
+  Database Transaction (ATOMIC):
+    1. Lock event row / use Firestore transaction
+    2. Count current GOING responses
+    3. IF going_count < capacity → INSERT/UPDATE RSVP
+    4. ELSE → reject or waitlist
+    5. Commit or rollback
+         │
+         ▼
+  Real-Time Event emitted:
+    Firestore → onSnapshot()  (or)
+    Supabase  → .subscribe()  (or)
+    WebSocket → broadcast()
+         │
+         ▼
+  All connected clients receive update
+         │
+         ▼
+  Organizer dashboard counter changes WITHOUT refresh</div>
+  </div></div>
+
+  <div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">Cloud Computing Concepts Demonstrated</span></div><div class="card-body">
+  <table class="data-table"><thead><tr><th>Concept</th><th>Where It Appears</th><th>Technology</th></tr></thead><tbody>
+    <tr><td>Cloud Hosting</td><td>Frontend + Backend deployment</td><td>Vercel / Cloud Run</td></tr>
+    <tr><td>SaaS</td><td>Multi-tenant event platform</td><td>Full stack</td></tr>
+    <tr><td>Cloud Auth</td><td>Register/Login/JWT</td><td>Firebase Auth / Supabase</td></tr>
+    <tr><td>Real-Time Database</td><td>Live RSVP updates</td><td>Firestore / Supabase Realtime</td></tr>
+    <tr><td>REST APIs</td><td>All CRUD operations</td><td>FastAPI / Flask</td></tr>
+    <tr><td>WebSockets / SSE</td><td>Dashboard live updates</td><td>ws / EventSource</td></tr>
+    <tr><td>RBAC</td><td>Organizer vs Attendee roles</td><td>Middleware + DB rules</td></tr>
+    <tr><td>Serverless Functions</td><td>RSVP processing, notifications</td><td>Cloud Functions</td></tr>
+    <tr><td>Atomic Transactions</td><td>Race-condition-safe capacity</td><td>Firestore Transaction</td></tr>
+    <tr><td>CDN</td><td>Static asset delivery</td><td>Vercel Edge / CloudFront</td></tr>
+    <tr><td>Env Variables / Secrets</td><td>API keys, DB URLs</td><td>.env / Secret Manager</td></tr>
+    <tr><td>CI/CD</td><td>Automated deploy on push</td><td>GitHub Actions</td></tr>
+    <tr><td>Monitoring</td><td>Error + performance tracking</td><td>Cloud Logging / Sentry</td></tr>
+    <tr><td>Scalability</td><td>Serverless auto-scale</td><td>Cloud Run / Lambda</td></tr>
+    <tr><td>High Availability</td><td>Multi-region deployment</td><td>Managed cloud services</td></tr>
+  </tbody></table>
+  </div></div>
+
+  <div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">Database Schema (PostgreSQL / Firestore)</span></div><div class="card-body">
+  <div class="code-block">
+-- USERS
+CREATE TABLE users (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        VARCHAR(100) NOT NULL,
+  email       VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  role        ENUM('ATTENDEE','ORGANIZER') DEFAULT 'ATTENDEE',
+  created_at  TIMESTAMP DEFAULT NOW()
+);
+
+-- EVENTS
+CREATE TABLE events (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organizer_id        UUID REFERENCES users(id),
+  event_name          VARCHAR(200) NOT NULL,
+  description         TEXT,
+  event_type          VARCHAR(50),
+  event_date          DATE NOT NULL,
+  start_time          TIME,
+  end_time            TIME,
+  venue               VARCHAR(300),
+  online_link         VARCHAR(500),
+  maximum_capacity    INTEGER NOT NULL DEFAULT 100,
+  registration_deadline DATE,
+  status              ENUM('DRAFT','PUBLISHED','FULL','COMPLETED','CANCELLED') DEFAULT 'DRAFT',
+  created_at          TIMESTAMP DEFAULT NOW(),
+  updated_at          TIMESTAMP DEFAULT NOW()
+);
+
+-- RSVPS  ← UNIQUE CONSTRAINT prevents duplicates
+CREATE TABLE rsvps (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id     UUID REFERENCES events(id),
+  user_id      UUID REFERENCES users(id),
+  status       ENUM('GOING','MAYBE','NOT_GOING') NOT NULL,
+  responded_at TIMESTAMP DEFAULT NOW(),
+  updated_at   TIMESTAMP DEFAULT NOW(),
+  UNIQUE(event_id, user_id)  -- ← One RSVP per user per event
+);
+
+-- WAITLIST (FIFO)
+CREATE TABLE waitlist (
+  id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id  UUID REFERENCES events(id),
+  user_id   UUID REFERENCES users(id),
+  joined_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(event_id, user_id)
+);
+
+-- ANNOUNCEMENTS
+CREATE TABLE announcements (
+  id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id  UUID REFERENCES events(id),
+  title     VARCHAR(200),
+  message   TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- NOTIFICATIONS
+CREATE TABLE notifications (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID REFERENCES users(id),
+  event_id   UUID REFERENCES events(id),
+  type       VARCHAR(50),
+  message    TEXT,
+  read       BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW()
+);</div>
+  </div></div>
+
+  <div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">Race Condition Fix — Atomic Capacity Check</span></div><div class="card-body">
+  <div class="alert warning">⚠️ Problem: If 2 users click "Going" when 1 seat remains, both read going=99, both pass the check, and both insert. Result: 101 attendees!</div>
+  <div class="code-block">
+# ❌ NAIVE (RACE CONDITION)
+going_count = db.query("SELECT COUNT(*) FROM rsvps WHERE event_id=? AND status='GOING'")
+if going_count < capacity:          # Both users pass this check!
+    db.execute("INSERT INTO rsvps ...")  # Both insert → overbooking
+
+# ✅ SAFE: PostgreSQL (Row Lock + Conditional Update)
+with db.transaction():
+    db.execute("SELECT * FROM events WHERE id=? FOR UPDATE", event_id)
+    going_count = db.query("SELECT COUNT(*) FROM rsvps WHERE event_id=? AND status='GOING'")
+    if going_count >= capacity:
+        raise CapacityFullError()
+    db.execute("INSERT INTO rsvps ... ON CONFLICT(event_id,user_id) DO UPDATE SET status=?")
+    if going_count + 1 >= capacity:
+        db.execute("UPDATE events SET status='FULL' WHERE id=?")
+
+# ✅ SAFE: Firestore (Transaction)
+async def submit_rsvp(event_id, user_id, status):
+    @firestore.transactional
+    async def update_in_transaction(transaction, event_ref, rsvp_ref):
+        event = (await transaction.get(event_ref)).to_dict()
+        going = event.get('going_count', 0)
+        if status == 'GOING' and going >= event['capacity']:
+            raise Exception('FULL')
+        transaction.set(rsvp_ref, {'status': status, ...}, merge=True)
+        if status == 'GOING':
+            transaction.update(event_ref, {'going_count': firestore.Increment(1)})</div>
+  </div></div>
+
+  <div class="card"><div class="card-header"><span class="card-title">GitHub Strategy & Commit History</span></div><div class="card-body">
+  <div class="code-block">
+# Repository: Real-Time-Cloud-Event-RSVP-Tracker
+
+git init
+git add .
+git commit -m "feat: Initialize cloud event platform architecture"
+git branch -M main
+git remote add origin https://github.com/yourusername/Real-Time-Cloud-Event-RSVP-Tracker.git
+git push -u origin main
+
+# Recommended commit sequence (14-day build):
+Day 1:  "docs: Add architecture diagram and cloud design"
+Day 2:  "feat: Implement Firebase Auth with role-based registration"
+Day 3:  "feat: Add event CRUD — create, update, cancel events"
+Day 4:  "feat: Implement RSVP workflow with GOING/MAYBE/NOT_GOING"
+Day 5:  "feat: Integrate Firestore real-time database"
+Day 6:  "feat: Add live RSVP counter with Firestore onSnapshot"
+Day 7:  "feat: Implement atomic capacity check (race-condition-safe)"
+Day 8:  "feat: Add FIFO waitlist with automatic promotion"
+Day 9:  "feat: Build organizer analytics dashboard"
+Day 10: "feat: Add announcements and in-app notification system"
+Day 11: "feat: Implement event analytics with charts"
+Day 12: "test: Add 25 automated tests including concurrency tests"
+Day 13: "deploy: Deploy frontend to Vercel, backend to Cloud Run"
+Day 14: "docs: Complete README, report, and interview prep"
+
+# GitHub Topics to add:
+cloud-computing event-management rsvp realtime python fastapi react
+websocket firestore rest-api serverless authentication capacity-management</div>
+  </div></div>
+</div>`;
+}
+
+// ══════════════════════════════════════════════════
+// REAL-TIME SIMULATION
+// ══════════════════════════════════════════════════
+function startRealtime() {
+  if (rtInterval) clearInterval(rtInterval);
+  // Simulate polling / WebSocket push every 3 seconds
+  rtInterval = setInterval(() => {
+    if (currentPage==='org-dashboard'&&currentUser&&currentUser.role==='ORGANIZER') {
+      const myEvents = DB.events.filter(e=>e.organizerId===currentUser.id);
+      const firstLive = myEvents.find(e=>e.status==='PUBLISHED');
+      if (firstLive) updateLiveMonitor(firstLive);
+      // Re-render bar chart
+      const myEventIds = myEvents.map(e=>e.id);
+      const allMyRsvps = DB.rsvps.filter(r=>myEventIds.includes(r.eventId));
+      const going = allMyRsvps.filter(r=>r.status==='GOING').length;
+      const maybe = allMyRsvps.filter(r=>r.status==='MAYBE').length;
+      const notGoing = allMyRsvps.filter(r=>r.status==='NOT_GOING').length;
+      if (document.getElementById('rsvp-bar-chart')) renderRsvpBarChart(going,maybe,notGoing);
+    }
+    if (currentPage==='event-detail') {
+      // Re-render detail counters if on event page
+      const detGoing = document.getElementById('det-going');
+      if (detGoing) {
+        // Find which event is open from the detail content
+        // (counters auto-update via triggerRealtimeUpdate)
+      }
+    }
+  }, 3000);
+}
+
+function triggerRealtimeUpdate(eventId) {
+  // Simulate real-time push: update all open views
+  const event = DB.events.find(e=>e.id===eventId);
+  if (!event) return;
+  const rsvps = DB.rsvps.filter(r=>r.eventId===eventId);
+  const going = rsvps.filter(r=>r.status==='GOING').length;
+  const maybe = rsvps.filter(r=>r.status==='MAYBE').length;
+  const notGoing = rsvps.filter(r=>r.status==='NOT_GOING').length;
+
+  // Update organizer dashboard live monitor if visible
+  if (document.getElementById('rt-going')&&event.organizerId===currentUser.id) {
+    setRT('rt-going',going);
+    setRT('rt-maybe',maybe);
+    setRT('rt-not-going',notGoing);
+    const pct=Math.min(100,Math.round(going/event.maximumCapacity*100));
+    const fill=document.getElementById('cap-bar-fill');
+    if(fill){fill.style.width=pct+'%';fill.className='capacity-fill '+(pct<50?'cap-low':pct<75?'cap-mid':pct<95?'cap-high':'cap-full');}
+    if(document.getElementById('cap-label-right'))document.getElementById('cap-label-right').textContent=`${going} / ${event.maximumCapacity}`;
+    if(document.getElementById('rsvp-bar-chart'))renderRsvpBarChart(going,maybe,notGoing);
+  }
+  // Update event detail page counters if visible
+  if (document.getElementById('det-going')) {
+    setRT('det-going',going);setRT('det-maybe',maybe);setRT('det-not-going',notGoing);
+  }
+}
+
+function setRT(id, val) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const old = parseInt(el.textContent)||0;
+  if (old!==val) {
+    el.textContent = val;
+    el.classList.remove('bump');
+    void el.offsetWidth; // reflow
+    el.classList.add('bump');
+  }
+}
+
+// ══════════════════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════════════════
+function addNotification(userId, eventId, type, message) {
+  DB.notifications.push({id:'n'+(++notifIdCounter),userId,eventId,type,message,read:false,createdAt:Date.now()});
+}
+function updateNotifBadge() {
+  if (!currentUser) return;
+  const unread = DB.notifications.filter(n=>n.userId===currentUser.id&&!n.read).length;
+  const badge = document.getElementById('notif-badge');
+  if (!badge) return;
+  badge.textContent = unread>9?'9+':unread;
+  badge.style.display = unread>0?'flex':'none';
+}
+function toggleNotifPanel() {
+  const panel = document.getElementById('notif-panel');
+  if (panel.style.display==='none') {
+    renderNotifPanel();
+    panel.style.display='block';
+  } else {
+    panel.style.display='none';
+  }
+}
+function renderNotifPanel() {
+  const notifs = DB.notifications.filter(n=>n.userId===currentUser.id).sort((a,b)=>b.createdAt-a.createdAt).slice(0,20);
+  const icons = {RSVP_CONFIRMED:'✅',RSVP_UPDATED:'🔄',EVENT_UPDATED:'📝',EVENT_CANCELLED:'❌',ANNOUNCEMENT:'📢',WAITLIST:'⏳',WAITLIST_PROMOTED:'🎉',SYSTEM:'ℹ️'};
+  const colors = {RSVP_CONFIRMED:'var(--green)',RSVP_UPDATED:'var(--accent)',EVENT_UPDATED:'var(--yellow)',EVENT_CANCELLED:'var(--red)',ANNOUNCEMENT:'var(--purple)',WAITLIST:'var(--yellow)',WAITLIST_PROMOTED:'var(--green)',SYSTEM:'var(--accent)'};
+  const list = document.getElementById('notif-list');
+  if (notifs.length===0) {
+    list.innerHTML='<div class="notif-empty">No notifications yet</div>';
+    return;
+  }
+  list.innerHTML = notifs.map(n=>`<div class="notif-item ${n.read?'':'unread'}" onclick="markRead('${n.id}')">
+    <div class="notif-icon" style="background:${colors[n.type]||'var(--accent)'}22">${icons[n.type]||'📌'}</div>
+    <div><div class="notif-text">${n.message}</div><div class="notif-time">${fmtTime(n.createdAt)}</div></div>
+  </div>`).join('');
+}
+function markRead(id) {
+  const n = DB.notifications.find(x=>x.id===id);
+  if (n) n.read=true;
+  updateNotifBadge();
+  renderNotifPanel();
+}
+function markAllRead() {
+  DB.notifications.filter(n=>n.userId===currentUser.id).forEach(n=>n.read=true);
+  updateNotifBadge();
+  renderNotifPanel();
+}
+
+// ══════════════════════════════════════════════════
+// TAB HELPERS
+// ══════════════════════════════════════════════════
+function switchTab(contentId, containerId, tabEl) {
+  const container = document.getElementById(containerId);
+  container.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));
+  const content = document.getElementById(contentId);
+  if (content) content.classList.add('active');
+  tabEl.closest('.tabs').querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  tabEl.classList.add('active');
+}
+
+// ══════════════════════════════════════════════════
+// MODAL HELPERS
+// ══════════════════════════════════════════════════
+function openModal(id) { document.getElementById(id).style.display='flex'; }
+function closeModal(id) { document.getElementById(id).style.display='none'; }
+
+// ══════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════
+function toast(msg, type='success') {
+  const icons = {success:'✅',error:'❌',warning:'⚠️',info:'ℹ️'};
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `${icons[type]||'ℹ️'} ${msg}`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(()=>{ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 3500);
+}
+
+// ══════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════
+function fmtDate(d) {
+  if (!d) return '';
+  try { return new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}); }
+  catch { return d; }
+}
+function fmtDateInput(d) { return d.toISOString().split('T')[0]; }
+function fmtTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const now = Date.now();
+  const diff = now-ts;
+  if (diff<60000) return 'just now';
+  if (diff<3600000) return Math.floor(diff/60000)+'m ago';
+  if (diff<86400000) return Math.floor(diff/3600000)+'h ago';
+  return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+}
+function statusLabel(s) { return s==='GOING'?'Going':s==='MAYBE'?'Maybe':'Not Going'; }
+
+// ══════════════════════════════════════════════════
+// CLOSE NOTIF PANEL ON OUTSIDE CLICK
+// ══════════════════════════════════════════════════
+document.addEventListener('click', e => {
+  const panel = document.getElementById('notif-panel');
+  const btn   = document.getElementById('notif-btn');
+  if (panel&&panel.style.display==='block'&&!panel.contains(e.target)&&!btn.contains(e.target)) {
+    panel.style.display='none';
+  }
+});
+
+// ══════════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════════
+seedData();
+</script>
+</body>
+</html>
